@@ -4,7 +4,8 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
+
 import serial.tools.list_ports
 from mpremote.transport_serial import SerialTransport
 
@@ -133,7 +134,7 @@ def resolve_by_id_path(device_path: str) -> Optional[str]:
     return None
 
 
-def discover_devices(include_ttyS: bool = False) -> List[DeviceInfo]:
+def discover_devices(include_ttyS: bool = False) -> List[DeviceInfo]:  # noqa: N803
     """
     Discover all connected serial devices.
 

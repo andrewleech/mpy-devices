@@ -1,7 +1,7 @@
 """Tests for platform-specific behavior."""
 
 import sys
-import pytest
+
 from mpy_devices import core
 
 

@@ -1,7 +1,7 @@
 """Tests for CLI functionality."""
 
-import pytest
 from click.testing import CliRunner
+
 from mpy_devices.cli import main
 
 

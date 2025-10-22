@@ -3,15 +3,15 @@
 __version__ = "0.1.0"
 
 from .core import (
-    DeviceInfo,
-    MicroPythonVersion,
     DeviceError,
+    DeviceInfo,
     DeviceNotFoundError,
-    QueryTimeoutError,
+    MicroPythonVersion,
     ParseError,
+    QueryTimeoutError,
     discover_devices,
-    query_device,
     find_device,
+    query_device,
     resolve_shortcut,
 )
 

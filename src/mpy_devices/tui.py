@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import List, Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal
-from textual.widgets import Header, Footer, DataTable, Static, Button
 from textual.binding import Binding
+from textual.containers import Container, Vertical
+from textual.widgets import DataTable, Footer, Header, Static
 
 from . import core
 

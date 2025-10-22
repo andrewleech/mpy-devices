@@ -1,6 +1,7 @@
 """Tests for core functionality."""
 
 import pytest
+
 from mpy_devices import core
 
 

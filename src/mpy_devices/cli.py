@@ -6,10 +6,8 @@ from typing import Optional
 
 import click
 from rich.console import Console
-from rich.table import Table
 
-from . import core, __version__
-
+from . import __version__, core
 
 console = Console()
 
@@ -67,21 +65,21 @@ def check_single_device(device_path: str, timeout: int, verbose: bool) -> bool:
         return True
 
     except core.QueryTimeoutError as e:
-        console.print(f"[red]✗ Failed to query MicroPython version[/red]")
+        console.print("[red]✗ Failed to query MicroPython version[/red]")
         if verbose:
             console.print(f"  Error: {e}")
         console.print()
         return False
 
     except core.ParseError as e:
-        console.print(f"[yellow]⚠ Incomplete MicroPython version data[/yellow]")
+        console.print("[yellow]⚠ Incomplete MicroPython version data[/yellow]")
         if verbose:
             console.print(f"  Error: {e}")
         console.print()
         return False
 
     except core.DeviceError as e:
-        console.print(f"[red]✗ Failed to query MicroPython version[/red]")
+        console.print("[red]✗ Failed to query MicroPython version[/red]")
         if verbose:
             console.print(f"  Error: {e}")
         console.print()
@@ -119,7 +117,7 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
         except core.QueryTimeoutError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[red]✗ Query timed out[/red]")
+            console.print("[red]✗ Query timed out[/red]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -127,7 +125,7 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
         except core.ParseError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[yellow]⚠ Failed to parse version[/yellow]")
+            console.print("[yellow]⚠ Failed to parse version[/yellow]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -135,7 +133,7 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
         except core.DeviceError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[red]✗ Device error[/red]")
+            console.print("[red]✗ Device error[/red]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -159,7 +157,7 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
             except (core.DeviceError, core.ParseError, core.QueryTimeoutError) as e:
                 still_failed += 1
                 print_device_info(device)
-                console.print(f"[red]✗ Still failed[/red]")
+                console.print("[red]✗ Still failed[/red]")
                 if verbose:
                     console.print(f"  Error: {type(e).__name__}: {e}")
                 console.print()
@@ -167,7 +165,7 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
         if still_failed > 0:
             console.print(f"[red]{still_failed} device(s) still failed after retry[/red]")
         else:
-            console.print(f"[green]All devices succeeded on retry[/green]")
+            console.print("[green]All devices succeeded on retry[/green]")
         console.print()
 
         return still_failed
@@ -203,7 +201,7 @@ def list_devices_text(timeout: int, verbose: bool, retry: bool):
         except core.QueryTimeoutError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[red]✗ Query timed out[/red]")
+            console.print("[red]✗ Query timed out[/red]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -211,7 +209,7 @@ def list_devices_text(timeout: int, verbose: bool, retry: bool):
         except core.ParseError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[yellow]⚠ Failed to parse version[/yellow]")
+            console.print("[yellow]⚠ Failed to parse version[/yellow]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -219,7 +217,7 @@ def list_devices_text(timeout: int, verbose: bool, retry: bool):
         except core.DeviceError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[red]✗ Device error[/red]")
+            console.print("[red]✗ Device error[/red]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
@@ -243,7 +241,7 @@ def list_devices_text(timeout: int, verbose: bool, retry: bool):
             except (core.DeviceError, core.ParseError, core.QueryTimeoutError) as e:
                 still_failed += 1
                 print_device_info(device)
-                console.print(f"[red]✗ Still failed[/red]")
+                console.print("[red]✗ Still failed[/red]")
                 if verbose:
                     console.print(f"  Error: {type(e).__name__}: {e}")
                 console.print()
@@ -251,7 +249,7 @@ def list_devices_text(timeout: int, verbose: bool, retry: bool):
         if still_failed > 0:
             console.print(f"[red]{still_failed} device(s) still failed after retry[/red]")
         else:
-            console.print(f"[green]All devices succeeded on retry[/green]")
+            console.print("[green]All devices succeeded on retry[/green]")
         console.print()
 
 
