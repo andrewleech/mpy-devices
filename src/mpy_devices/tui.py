@@ -60,17 +60,51 @@ class DeviceDetails(Static):
         self.update("\n".join(lines))
 
     def show_error(self, device: core.DeviceInfo, error: str):
-        """Display error information."""
+        """Display error information with all available device details."""
         lines = []
+
         lines.append(f"[b]TTY Path:[/b] {device.path}")
+
+        if device.by_id_path:
+            lines.append(f"[b]By-ID Path:[/b] {device.by_id_path}")
+
+        if device.vid_pid_str:
+            lines.append(f"[b]VID:PID:[/b] {device.vid_pid_str}")
+
+        if device.serial_number:
+            lines.append(f"[b]Serial Number:[/b] {device.serial_number}")
+
+        if device.manufacturer:
+            lines.append(f"[b]Manufacturer:[/b] {device.manufacturer}")
+
+        if device.product:
+            lines.append(f"[b]Product:[/b] {device.product}")
+
         lines.append("")
         lines.append(f"[red]Error:[/red] {error}")
         self.update("\n".join(lines))
 
     def show_querying(self, device: core.DeviceInfo):
-        """Show that device is being queried."""
+        """Show that device is being queried with all available device details."""
         lines = []
+
         lines.append(f"[b]TTY Path:[/b] {device.path}")
+
+        if device.by_id_path:
+            lines.append(f"[b]By-ID Path:[/b] {device.by_id_path}")
+
+        if device.vid_pid_str:
+            lines.append(f"[b]VID:PID:[/b] {device.vid_pid_str}")
+
+        if device.serial_number:
+            lines.append(f"[b]Serial Number:[/b] {device.serial_number}")
+
+        if device.manufacturer:
+            lines.append(f"[b]Manufacturer:[/b] {device.manufacturer}")
+
+        if device.product:
+            lines.append(f"[b]Product:[/b] {device.product}")
+
         lines.append("")
         lines.append("[yellow]Querying device...[/yellow]")
         self.update("\n".join(lines))
