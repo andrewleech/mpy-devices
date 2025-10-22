@@ -175,30 +175,84 @@ def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
     return len(failed)
 
 
-def list_devices_text():
-    """List devices in simple text format (like mpremote connect list)."""
+def list_devices_text(timeout: int, verbose: bool, retry: bool):
+    """
+    List all devices with full details (queries each device).
+
+    This matches the behavior of the original bash script.
+    """
     devices = core.discover_devices()
 
     if not devices:
-        console.print("No devices found")
+        console.print("[yellow]No MicroPython devices found[/yellow]")
         return
 
+    console.print("[blue]Discovering MicroPython devices...[/blue]")
+    console.print()
+    console.print(f"[blue]Found {len(devices)} device(s)[/blue]")
+    console.print()
+
+    # Query all devices
+    failed = []
     for device in devices:
-        parts = [device.path]
+        try:
+            version = core.query_device(device.path, timeout=timeout)
+            print_device_info(device)
+            print_version_info(version)
 
-        if device.serial_number:
-            parts.append(device.serial_number)
+        except core.QueryTimeoutError as e:
+            failed.append(device.path)
+            print_device_info(device)
+            console.print(f"[red]✗ Query timed out[/red]")
+            if verbose:
+                console.print(f"  Error: {e}")
+            console.print()
 
-        if device.vid_pid_str:
-            parts.append(device.vid_pid_str)
+        except core.ParseError as e:
+            failed.append(device.path)
+            print_device_info(device)
+            console.print(f"[yellow]⚠ Failed to parse version[/yellow]")
+            if verbose:
+                console.print(f"  Error: {e}")
+            console.print()
 
-        if device.manufacturer:
-            parts.append(device.manufacturer)
+        except core.DeviceError as e:
+            failed.append(device.path)
+            print_device_info(device)
+            console.print(f"[red]✗ Device error[/red]")
+            if verbose:
+                console.print(f"  Error: {e}")
+            console.print()
 
-        if device.product:
-            parts.append(device.product)
+    # Retry failed devices if requested
+    if failed and retry:
+        console.print(f"[yellow]=== Retrying {len(failed)} failed device(s) ===[/yellow]")
+        console.print()
 
-        console.print(" ".join(parts))
+        still_failed = 0
+        for device_path in failed:
+            device = core.find_device(device_path)
+            if not device:
+                continue
+
+            try:
+                version = core.query_device(device.path, timeout=timeout)
+                print_device_info(device)
+                print_version_info(version)
+
+            except (core.DeviceError, core.ParseError, core.QueryTimeoutError) as e:
+                still_failed += 1
+                print_device_info(device)
+                console.print(f"[red]✗ Still failed[/red]")
+                if verbose:
+                    console.print(f"  Error: {type(e).__name__}: {e}")
+                console.print()
+
+        if still_failed > 0:
+            console.print(f"[red]{still_failed} device(s) still failed after retry[/red]")
+        else:
+            console.print(f"[green]All devices succeeded on retry[/green]")
+        console.print()
 
 
 def list_devices_json():
@@ -263,7 +317,7 @@ def check_device_json(device_path: str, timeout: int):
 
 @click.command()
 @click.argument("device", required=False)
-@click.option("--list", "list_mode", is_flag=True, help="List all devices (text output)")
+@click.option("--list", "list_mode", is_flag=True, help="Query and list all devices with full details")
 @click.option("--json", "json_mode", is_flag=True, help="Output in JSON format")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed error messages")
 @click.option("-t", "--timeout", default=5, help="Query timeout in seconds (default: 5)")
@@ -277,10 +331,10 @@ def main(device: Optional[str], list_mode: bool, json_mode: bool,
     \b
     Usage:
       mpy-devices                 Launch TUI interface
+      mpy-devices --list          Query all devices and show full details
       mpy-devices /dev/ttyACM0    Check specific device
       mpy-devices a0              Check device using shortcut
-      mpy-devices --list          List all devices
-      mpy-devices --json          List devices in JSON format
+      mpy-devices --json          List devices in JSON format (no query)
       mpy-devices --json a0       Check device and output JSON
 
     \b
@@ -303,7 +357,7 @@ def main(device: Optional[str], list_mode: bool, json_mode: bool,
 
     # List mode
     if list_mode:
-        list_devices_text()
+        list_devices_text(timeout, verbose, retry)
         return
 
     # Device check mode
