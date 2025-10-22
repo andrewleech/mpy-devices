@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mpy-devices"
+version = "0.1.0"
+description = "Query and monitor MicroPython devices - discover connected devices and check firmware versions"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Andrew Leech" },
+]
+keywords = ["micropython", "devices", "serial", "usb", "firmware"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Embedded Systems",
+]
+
+dependencies = [
+    "pyserial>=3.5",
+    "click>=8.0",
+    "rich>=13.0",
+    "textual>=0.50",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+mpy-devices = "mpy_devices.cli:main"
+check-devices = "mpy_devices.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/andrewleech/mpy-devices"
+Repository = "https://github.com/andrewleech/mpy-devices"
+Issues = "https://github.com/andrewleech/mpy-devices/issues"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/mpy_devices"]
+
+[tool.ruff]
+line-length = 99
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 99
+target-version = ["py38"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

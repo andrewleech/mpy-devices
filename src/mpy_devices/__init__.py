@@ -1,0 +1,29 @@
+"""MicroPython device checker and monitor."""
+
+__version__ = "0.1.0"
+
+from .core import (
+    DeviceInfo,
+    MicroPythonVersion,
+    DeviceError,
+    DeviceNotFoundError,
+    QueryTimeoutError,
+    ParseError,
+    discover_devices,
+    query_device,
+    find_device,
+    resolve_shortcut,
+)
+
+__all__ = [
+    "DeviceInfo",
+    "MicroPythonVersion",
+    "DeviceError",
+    "DeviceNotFoundError",
+    "QueryTimeoutError",
+    "ParseError",
+    "discover_devices",
+    "query_device",
+    "find_device",
+    "resolve_shortcut",
+]
