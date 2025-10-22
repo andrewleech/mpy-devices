@@ -54,8 +54,9 @@ src/mpy_devices/
 - Interactive device list with live refresh
 - Device detail panel
 - Keyboard navigation (r=refresh, q=quit)
-- Uses synchronous queries (acceptable for typical device counts)
-- Future enhancement: async device queries for better responsiveness
+- Async device queries using Textual's worker threads
+- Shows UI immediately, devices update as queries complete
+- Parallel device queries for improved performance
 
 ## Development Setup
 
@@ -297,22 +298,32 @@ Test structure:
 
 Tests use mocking for `serial.tools.list_ports.comports()` and `SerialTransport` to avoid requiring real hardware.
 
-## Future Enhancements
+## TUI Implementation
 
 ### Async Device Queries
 
-TUI currently queries devices synchronously, blocking the UI. Future improvement:
+The TUI uses Textual's `@work` decorator for non-blocking device queries:
 
 ```python
-async def query_device_async(device_path: str) -> MicroPythonVersion:
-    # Use asyncio to query without blocking
-    ...
-
-# In TUI
-async def query_all_devices(self):
-    tasks = [query_device_async(d.path) for d in self.devices]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+@work(thread=True, exclusive=False)
+def query_device_worker(self, device: core.DeviceInfo) -> None:
+    """Query a single device in a background thread."""
+    try:
+        version = core.query_device(device.path, timeout=self.timeout)
+        self.call_from_thread(self.update_device_success, device, version)
+    except Exception as e:
+        self.call_from_thread(self.update_device_failure, device, str(e))
 ```
+
+**Key features:**
+- UI shows immediately after device discovery
+- Each device queried in parallel worker thread
+- Table updates as each query completes
+- Status bar shows real-time progress (e.g., "Querying... 3/5 (2 OK, 1 failed)")
+- User can interact with UI while queries run
+- Worker cancellation on refresh
+
+## Future Enhancements
 
 ### Live Monitoring
 

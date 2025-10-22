@@ -1,12 +1,14 @@
 """Textual TUI interface for mpy-devices."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.widgets import DataTable, Footer, Header, Static
+from textual.worker import Worker, WorkerState
 
 from . import core
 
@@ -131,6 +133,13 @@ class MPyDevicesApp(App):
         self.timeout = timeout
         self.devices: List[core.DeviceInfo] = []
         self.versions: dict = {}  # device.path -> MicroPythonVersion or error
+        self.active_workers: List[Worker] = []  # Track workers for cancellation
+        self.query_stats: Dict[str, int] = {
+            "total": 0,
+            "completed": 0,
+            "success": 0,
+            "failed": 0,
+        }
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -191,56 +200,117 @@ class MPyDevicesApp(App):
                 key=device.path,
             )
 
-        self.update_status(f"Found {len(self.devices)} device(s) - Querying...")
+        # Start querying devices in parallel (non-blocking)
+        self.start_device_queries()
 
-        # Query devices in background
-        self.query_all_devices()
-
-    def query_all_devices(self) -> None:
+    def start_device_queries(self) -> None:
         """
-        Query all devices for version information.
+        Start querying all devices in parallel using worker threads.
 
-        Design note: Uses synchronous queries for simplicity. This blocks the UI
-        during device queries, but is acceptable for typical device counts (< 10).
-        For large device counts or production use, consider implementing async
-        queries using asyncio workers or threading to maintain UI responsiveness.
+        Each device is queried in its own thread, allowing the UI to remain
+        responsive and show results as they complete.
         """
+        # Cancel any existing workers from previous refresh
+        self.cancel_workers()
+
+        # Reset statistics
+        self.query_stats = {
+            "total": len(self.devices),
+            "completed": 0,
+            "success": 0,
+            "failed": 0,
+        }
+
+        # Spawn a worker for each device
+        for device in self.devices:
+            worker = self.query_device_worker(device)
+            self.active_workers.append(worker)
+
+        self.update_status(f"Querying {len(self.devices)} device(s)...")
+
+    @work(thread=True, exclusive=False)
+    def query_device_worker(self, device: core.DeviceInfo) -> None:
+        """
+        Query a single device in a background thread.
+
+        This worker runs in parallel with other device queries, allowing
+        the UI to update as each device completes.
+        """
+        try:
+            version = core.query_device(device.path, timeout=self.timeout)
+            # Update UI from thread
+            self.call_from_thread(self.update_device_success, device, version)
+
+        except Exception as e:
+            # Update UI from thread
+            self.call_from_thread(self.update_device_failure, device, str(e))
+
+    def update_device_success(self, device: core.DeviceInfo, version: core.MicroPythonVersion) -> None:
+        """Update UI when device query succeeds (called from main thread)."""
         table = self.query_one(DeviceList)
 
-        success_count = 0
-        failed_count = 0
+        # Store version
+        self.versions[device.path] = version
 
-        for device in self.devices:
-            try:
-                version = core.query_device(device.path, timeout=self.timeout)
-                self.versions[device.path] = version
+        # Extract board name (first part of machine)
+        board = version.machine.split()[0] if version.machine else "Unknown"
 
-                # Extract board name (first part of machine)
-                board = version.machine.split()[0] if version.machine else "Unknown"
+        # Update table row
+        table.update_cell(device.path, "board", board)
+        table.update_cell(device.path, "status", "[green]✓[/green]")
 
-                # Update table row
-                table.update_cell(device.path, "board", board)
-                table.update_cell(device.path, "status", "[green]✓[/green]")
+        # Update statistics
+        self.query_stats["completed"] += 1
+        self.query_stats["success"] += 1
+        self.update_query_status()
 
-                success_count += 1
+    def update_device_failure(self, device: core.DeviceInfo, error: str) -> None:
+        """Update UI when device query fails (called from main thread)."""
+        table = self.query_one(DeviceList)
 
-            except Exception as e:
-                self.versions[device.path] = str(e)
+        # Store error
+        self.versions[device.path] = error
 
-                table.update_cell(device.path, "status", "[red]✗[/red]")
+        # Update table row
+        table.update_cell(device.path, "status", "[red]✗[/red]")
 
-                failed_count += 1
+        # Update statistics
+        self.query_stats["completed"] += 1
+        self.query_stats["failed"] += 1
+        self.update_query_status()
 
-        # Update status
-        status_parts = []
-        if success_count > 0:
-            status_parts.append(f"[green]{success_count} OK[/green]")
-        if failed_count > 0:
-            status_parts.append(f"[red]{failed_count} failed[/red]")
+    def update_query_status(self) -> None:
+        """Update status bar with current query progress."""
+        stats = self.query_stats
+        total = stats["total"]
+        completed = stats["completed"]
+        success = stats["success"]
+        failed = stats["failed"]
 
-        self.update_status(
-            f"{' | '.join(status_parts)} - {datetime.now().strftime('%H:%M:%S')}"
-        )
+        if completed < total:
+            # Still querying
+            self.update_status(
+                f"Querying... {completed}/{total} "
+                f"([green]{success} OK[/green], [red]{failed} failed[/red])"
+            )
+        else:
+            # All queries complete
+            status_parts = []
+            if success > 0:
+                status_parts.append(f"[green]{success} OK[/green]")
+            if failed > 0:
+                status_parts.append(f"[red]{failed} failed[/red]")
+
+            self.update_status(
+                f"{' | '.join(status_parts)} - {datetime.now().strftime('%H:%M:%S')}"
+            )
+
+    def cancel_workers(self) -> None:
+        """Cancel all active worker threads."""
+        for worker in self.active_workers:
+            if worker.state not in (WorkerState.SUCCESS, WorkerState.ERROR, WorkerState.CANCELLED):
+                worker.cancel()
+        self.active_workers.clear()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle device selection."""
@@ -266,11 +336,14 @@ class MPyDevicesApp(App):
         version_or_error = self.versions.get(device_path)
 
         if isinstance(version_or_error, core.MicroPythonVersion):
+            # Query complete with success
             details.show_device(device, version_or_error)
         elif isinstance(version_or_error, str):
+            # Query complete with error
             details.show_error(device, version_or_error)
         else:
-            details.show_device(device, None)
+            # Query still in progress
+            details.show_querying(device)
 
     def action_help(self) -> None:
         """Show help message."""
