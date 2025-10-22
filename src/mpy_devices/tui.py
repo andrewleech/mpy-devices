@@ -169,6 +169,7 @@ class MPyDevicesApp(App):
         self.devices: List[core.DeviceInfo] = []
         self.versions: dict = {}  # device.path -> MicroPythonVersion or error
         self.active_workers: List[Worker] = []  # Track workers for cancellation
+        self.selected_device_path: Optional[str] = None  # Currently selected device
         self.query_stats: Dict[str, int] = {
             "total": 0,
             "completed": 0,
@@ -214,6 +215,7 @@ class MPyDevicesApp(App):
         table.clear()
         self.devices = []
         self.versions = {}
+        self.selected_device_path = None
         details.clear_details()
 
         # Discover devices
@@ -316,11 +318,9 @@ class MPyDevicesApp(App):
         table.update_cell(device.path, "status", "[yellow]⟳ querying...[/yellow]")
 
         # Update details if this device is currently selected
-        if table.cursor_row is not None:
-            row_key = table.get_row_at(table.cursor_row)[0]
-            if hasattr(row_key, 'value') and row_key.value == device.path:
-                details = self.query_one(DeviceDetails)
-                details.show_querying(device)
+        if self.selected_device_path == device.path:
+            details = self.query_one(DeviceDetails)
+            details.show_querying(device)
 
     def update_device_success(self, device: core.DeviceInfo, version: core.MicroPythonVersion) -> None:
         """Update UI when device query succeeds (called from main thread)."""
@@ -342,11 +342,9 @@ class MPyDevicesApp(App):
         self.update_query_status()
 
         # Update details if this device is currently selected
-        if table.cursor_row is not None:
-            row_key = table.get_row_at(table.cursor_row)[0]
-            if hasattr(row_key, 'value') and row_key.value == device.path:
-                details = self.query_one(DeviceDetails)
-                details.show_device(device, version)
+        if self.selected_device_path == device.path:
+            details = self.query_one(DeviceDetails)
+            details.show_device(device, version)
 
     def update_device_failure(self, device: core.DeviceInfo, error: str) -> None:
         """Update UI when device query fails (called from main thread)."""
@@ -364,11 +362,9 @@ class MPyDevicesApp(App):
         self.update_query_status()
 
         # Update details if this device is currently selected
-        if table.cursor_row is not None:
-            row_key = table.get_row_at(table.cursor_row)[0]
-            if hasattr(row_key, 'value') and row_key.value == device.path:
-                details = self.query_one(DeviceDetails)
-                details.show_error(device, error)
+        if self.selected_device_path == device.path:
+            details = self.query_one(DeviceDetails)
+            details.show_error(device, error)
 
     def update_query_status(self) -> None:
         """Update status bar with current query progress."""
@@ -434,9 +430,13 @@ class MPyDevicesApp(App):
 
         # Get device (safely handle empty/invalid selection)
         if not row_key or not hasattr(row_key, 'value'):
+            self.selected_device_path = None
             return
 
         device_path = row_key.value
+
+        # Track currently selected device
+        self.selected_device_path = device_path
 
         # Find device
         device = None
