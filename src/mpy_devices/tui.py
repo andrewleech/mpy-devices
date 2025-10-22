@@ -85,26 +85,26 @@ class MPyDevicesApp(App):
 
     CSS = """
     Screen {
-        layout: grid;
-        grid-size: 2 2;
-        grid-rows: 1fr 3fr;
+        layout: vertical;
     }
 
-    #header-container {
-        column-span: 2;
-        height: 3;
+    Header {
+        dock: top;
     }
 
     #device-list {
-        row-span: 2;
+        height: 60%;
+        border: solid $accent;
     }
 
     #details-panel {
+        height: 40%;
         border: solid $accent;
         padding: 1;
     }
 
     #status-bar {
+        dock: bottom;
         background: $surface;
         color: $text;
         padding: 0 1;
