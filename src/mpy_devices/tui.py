@@ -235,6 +235,10 @@ class MPyDevicesApp(App):
                 key=device.path,
             )
 
+        # Select first device to show details immediately
+        if self.devices:
+            table.move_cursor(row=0)
+
         # Start querying devices in parallel (non-blocking)
         self.start_device_queries()
 
