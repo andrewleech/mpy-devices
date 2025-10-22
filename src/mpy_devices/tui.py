@@ -312,15 +312,23 @@ class MPyDevicesApp(App):
                 worker.cancel()
         self.active_workers.clear()
 
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Handle device cursor movement (arrow keys)."""
+        self._show_device_details(event.row_key)
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle device selection."""
+        """Handle device selection (Enter key)."""
+        self._show_device_details(event.row_key)
+
+    def _show_device_details(self, row_key) -> None:
+        """Show device details for the given row key."""
         details = self.query_one(DeviceDetails)
 
-        # Get selected device (safely handle empty/invalid selection)
-        if not event.row_key or not hasattr(event.row_key, 'value'):
+        # Get device (safely handle empty/invalid selection)
+        if not row_key or not hasattr(row_key, 'value'):
             return
 
-        device_path = event.row_key.value
+        device_path = row_key.value
 
         # Find device
         device = None
