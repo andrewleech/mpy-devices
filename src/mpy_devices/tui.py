@@ -199,7 +199,7 @@ class MPyDevicesApp(App):
         table.add_column("Device", key="device", width=20)
         table.add_column("Serial", key="serial", width=15)
         table.add_column("VID:PID", key="vid_pid", width=10)
-        table.add_column("Board", key="board", width=40)
+        table.add_column("Board", key="board")  # Auto-scale to fit screen
         table.add_column("Status", key="status", width=10)
 
         # Load devices
