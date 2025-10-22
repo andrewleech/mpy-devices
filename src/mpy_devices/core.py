@@ -192,56 +192,73 @@ def query_device(device_path: str, timeout: int = 5) -> MicroPythonVersion:
         QueryTimeoutError: Query timed out
         ParseError: Failed to parse response
     """
+    import io
+    import sys
+
     # Resolve shortcuts
     resolved_device = resolve_shortcut(device_path)
 
-    # Connect to device
-    try:
-        transport = SerialTransport(resolved_device, baudrate=115200)
-    except Exception as e:
-        raise DeviceNotFoundError(f"Failed to connect to {device_path}: {e}")
+    # Suppress mpremote's stdout output (it prints b'' in some cases)
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
 
     try:
-        # Enter raw REPL
-        transport.enter_raw_repl(soft_reset=False, timeout_overall=timeout)
-
-        # Query os.uname()
-        command = "import os; print(os.uname())"
-        output, _ = transport.exec_raw(command, timeout=timeout)
-        output_str = output.decode('utf-8', errors='replace').strip()
-
-        # Parse the output
-        result = parse_uname_output(output_str)
-
-        # Exit raw REPL and close
-        transport.exit_raw_repl()
-        transport.close()
-
-        return result
-
-    except (TimeoutError, OSError) as e:
-        # Timeout errors from mpremote
+        # Connect to device
         try:
-            transport.close()
-        except Exception:
-            pass
-        raise QueryTimeoutError(f"Query timed out after {timeout}s: {e}")
+            transport = SerialTransport(resolved_device, baudrate=115200)
+        except Exception as e:
+            sys.stdout = old_stdout
+            raise DeviceNotFoundError(f"Failed to connect to {device_path}: {e}")
 
-    except ParseError:
-        # Re-raise ParseError as-is
         try:
-            transport.close()
-        except Exception:
-            pass
-        raise
+            # Enter raw REPL
+            transport.enter_raw_repl(soft_reset=False, timeout_overall=timeout)
 
-    except Exception as e:
-        # All other errors
-        try:
+            # Query os.uname()
+            command = "import os; print(os.uname())"
+            output, _ = transport.exec_raw(command, timeout=timeout)
+            output_str = output.decode('utf-8', errors='replace').strip()
+
+            # Parse the output
+            result = parse_uname_output(output_str)
+
+            # Exit raw REPL and close
+            transport.exit_raw_repl()
             transport.close()
-        except Exception:
-            pass
-        raise DeviceError(f"Failed to query device: {e}")
+
+            sys.stdout = old_stdout
+            return result
+
+        except (TimeoutError, OSError) as e:
+            # Timeout errors from mpremote
+            try:
+                transport.close()
+            except Exception:
+                pass
+            sys.stdout = old_stdout
+            raise QueryTimeoutError(f"Query timed out after {timeout}s: {e}")
+
+        except ParseError:
+            # Re-raise ParseError as-is
+            try:
+                transport.close()
+            except Exception:
+                pass
+            sys.stdout = old_stdout
+            raise
+
+        except Exception as e:
+            # All other errors
+            try:
+                transport.close()
+            except Exception:
+                pass
+            sys.stdout = old_stdout
+            raise DeviceError(f"Failed to query device: {e}")
+
+    finally:
+        # Ensure stdout is always restored
+        sys.stdout = old_stdout
 
 
 def parse_uname_output(output: str) -> MicroPythonVersion:

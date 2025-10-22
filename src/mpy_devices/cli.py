@@ -14,8 +14,11 @@ console = Console()
 
 def print_device_info(device: core.DeviceInfo, show_header: bool = True):
     """Print device information in text format."""
+    import sys
+
     if show_header:
         console.print(f"[blue]Querying: {device.path}[/blue]")
+        sys.stdout.flush()  # Ensure output appears immediately
 
     console.print(f"  TTY Path:    {device.path}")
 
@@ -30,14 +33,19 @@ def print_device_info(device: core.DeviceInfo, show_header: bool = True):
     if device.serial_number:
         console.print(f"  Device ID:   {device.serial_number}")
 
+    sys.stdout.flush()  # Ensure output appears immediately
+
 
 def print_version_info(version: core.MicroPythonVersion):
     """Print MicroPython version information."""
+    import sys
+
     console.print(f"  Machine:     {version.machine}")
     console.print(f"  System:      {version.sysname}")
     console.print(f"  Release:     {version.release}")
     console.print(f"  Version:     {version.version}")
     console.print()
+    sys.stdout.flush()  # Ensure output appears immediately
 
 
 def check_single_device(device_path: str, timeout: int, verbose: bool) -> bool:
