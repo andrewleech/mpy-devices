@@ -8,7 +8,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from . import core
+from . import core, __version__
 
 
 console = Console()
@@ -88,9 +88,14 @@ def check_single_device(device_path: str, timeout: int, verbose: bool) -> bool:
         return False
 
 
-def check_all_devices(timeout: int, verbose: bool) -> int:
+def check_all_devices(timeout: int, verbose: bool, retry: bool) -> int:
     """
     Check all discovered devices.
+
+    Args:
+        timeout: Query timeout in seconds
+        verbose: Show detailed error messages
+        retry: Retry failed devices
 
     Returns:
         Number of failed devices
@@ -111,16 +116,32 @@ def check_all_devices(timeout: int, verbose: bool) -> int:
             print_device_info(device)
             print_version_info(version)
 
-        except (core.DeviceError, core.ParseError, core.QueryTimeoutError) as e:
+        except core.QueryTimeoutError as e:
             failed.append(device.path)
             print_device_info(device)
-            console.print(f"[red]✗ Failed to query MicroPython version[/red]")
+            console.print(f"[red]✗ Query timed out[/red]")
             if verbose:
                 console.print(f"  Error: {e}")
             console.print()
 
-    # Retry failed devices
-    if failed:
+        except core.ParseError as e:
+            failed.append(device.path)
+            print_device_info(device)
+            console.print(f"[yellow]⚠ Failed to parse version[/yellow]")
+            if verbose:
+                console.print(f"  Error: {e}")
+            console.print()
+
+        except core.DeviceError as e:
+            failed.append(device.path)
+            print_device_info(device)
+            console.print(f"[red]✗ Device error[/red]")
+            if verbose:
+                console.print(f"  Error: {e}")
+            console.print()
+
+    # Retry failed devices if requested
+    if failed and retry:
         console.print(f"[yellow]=== Retrying {len(failed)} failed device(s) ===[/yellow]")
         console.print()
 
@@ -138,9 +159,9 @@ def check_all_devices(timeout: int, verbose: bool) -> int:
             except (core.DeviceError, core.ParseError, core.QueryTimeoutError) as e:
                 still_failed += 1
                 print_device_info(device)
-                console.print(f"[red]✗ Failed to query MicroPython version[/red]")
+                console.print(f"[red]✗ Still failed[/red]")
                 if verbose:
-                    console.print(f"  Error: {e}")
+                    console.print(f"  Error: {type(e).__name__}: {e}")
                 console.print()
 
         if still_failed > 0:
@@ -151,7 +172,7 @@ def check_all_devices(timeout: int, verbose: bool) -> int:
 
         return still_failed
 
-    return 0
+    return len(failed)
 
 
 def list_devices_text():
@@ -246,9 +267,10 @@ def check_device_json(device_path: str, timeout: int):
 @click.option("--json", "json_mode", is_flag=True, help="Output in JSON format")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed error messages")
 @click.option("-t", "--timeout", default=5, help="Query timeout in seconds (default: 5)")
+@click.option("--retry", is_flag=True, help="Retry failed devices automatically")
 @click.option("--version", "show_version", is_flag=True, help="Show version and exit")
 def main(device: Optional[str], list_mode: bool, json_mode: bool,
-         verbose: bool, timeout: int, show_version: bool):
+         verbose: bool, timeout: int, retry: bool, show_version: bool):
     """
     MicroPython device checker and monitor.
 
@@ -263,12 +285,12 @@ def main(device: Optional[str], list_mode: bool, json_mode: bool,
 
     \b
     Shortcuts:
-      a0-a9   -> /dev/ttyACM0-9 (Linux)
-      u0-u9   -> /dev/ttyUSB0-9 (Linux)
+      a0-a9   -> /dev/ttyACM0-9 (Linux), /dev/cu.usbmodem0-9 (macOS)
+      u0-u9   -> /dev/ttyUSB0-9 (Linux), /dev/cu.usbserial-0-9 (macOS)
       c0-c99  -> COM0-99 (Windows)
     """
     if show_version:
-        console.print("mpy-devices 0.1.0")
+        console.print(f"mpy-devices {__version__}")
         sys.exit(0)
 
     # JSON mode

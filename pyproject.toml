@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mpy-devices"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Query and monitor MicroPython devices - discover connected devices and check firmware versions"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -31,6 +31,7 @@ dependencies = [
     "click>=8.0",
     "rich>=13.0",
     "textual>=0.50",
+    "mpremote>=1.20",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +53,9 @@ Issues = "https://github.com/andrewleech/mpy-devices/issues"
 
 [tool.hatchling.build.targets.wheel]
 packages = ["src/mpy_devices"]
+
+[tool.hatch.version]
+path = "src/mpy_devices/__init__.py"
 
 [tool.ruff]
 line-length = 99

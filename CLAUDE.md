@@ -13,6 +13,7 @@ This file provides context for AI coding agents working on the mpy-devices packa
 3. **User-friendly** - TUI as default, text output for scripting
 4. **Maintainable** - Type hints, clear separation of concerns
 5. **Extensible** - Easy to add features like monitoring, automation
+6. **Cross-platform** - Full support for Linux, macOS, and Windows
 
 ### Why Python over Bash?
 
@@ -53,7 +54,8 @@ src/mpy_devices/
 - Interactive device list with live refresh
 - Device detail panel
 - Keyboard navigation (r=refresh, q=quit)
-- Future: async device queries, live monitoring
+- Uses synchronous queries (acceptable for typical device counts)
+- Future enhancement: async device queries for better responsiveness
 
 ## Development Setup
 
@@ -160,6 +162,27 @@ transport.close()
 
 This is what mpremote itself uses internally - we just import it directly.
 
+### Platform Support
+
+The tool supports Linux, macOS, and Windows with platform-specific handling:
+
+**Linux:**
+- Device paths: `/dev/ttyACM*`, `/dev/ttyUSB*`
+- Shortcuts: `a0` → `/dev/ttyACM0`, `u0` → `/dev/ttyUSB0`
+- By-ID paths: `/dev/serial/by-id/*` (stable device references)
+- Filters built-in serial ports (`/dev/ttyS*`) by default
+
+**macOS:**
+- Device paths: `/dev/cu.usbmodem*`, `/dev/cu.usbserial*`
+- Shortcuts: `a0` → `/dev/cu.usbmodem0`, `u0` → `/dev/cu.usbserial-0`
+- Filters `/dev/tty.*` devices (keeps only `/dev/cu.*`)
+
+**Windows:**
+- Device paths: `COM1`, `COM2`, etc.
+- Shortcuts: `c1` → `COM1`, `c10` → `COM10`
+
+Platform detection uses `sys.platform` to apply appropriate filtering and path resolution.
+
 ### Parsing os.uname()
 
 Robust regex parsing with fallbacks:
@@ -232,6 +255,17 @@ $ mpy-devices --json /dev/ttyACM0
 }
 ```
 
+### Retry Flag
+
+The `--retry` flag enables automatic retry of failed device queries:
+
+```bash
+$ mpy-devices --list --retry
+# Failed devices will be retried automatically
+```
+
+By default, failed devices are not retried. Use this flag when working with flaky connections or during initial device enumeration.
+
 ## Testing
 
 ### Manual Testing
@@ -249,7 +283,7 @@ mpy-devices --json
 mpy-devices /dev/ttyACM0
 ```
 
-### Unit Tests (Future)
+### Unit Tests
 
 ```bash
 pytest tests/
@@ -257,11 +291,11 @@ pytest --cov=mpy_devices
 ```
 
 Test structure:
-- `tests/test_core.py` - Core functionality
-- `tests/test_cli.py` - CLI behavior
-- `tests/test_tui.py` - TUI components
+- `tests/test_core.py` - Core functionality (shortcut resolution, parsing, data classes)
+- `tests/test_cli.py` - CLI behavior (flags, arguments, output formats)
+- `tests/test_platform.py` - Platform-specific behavior (shortcuts, filtering)
 
-Mock `serial.tools.list_ports.comports()` and `SerialTransport` for tests.
+Tests use mocking for `serial.tools.list_ports.comports()` and `SerialTransport` to avoid requiring real hardware.
 
 ## Future Enhancements
 
@@ -347,19 +381,22 @@ only_micropython = true
 ## Dependencies
 
 **Core:**
-- `pyserial` - Device discovery via `list_ports`
-- `click` - CLI framework
-- `rich` - Pretty console output
-- `textual` - TUI framework
-
-**MicroPython:**
-- `mpremote` - Optional, for `SerialTransport`
-- Fallback: Search for `tools/mpremote` in repo
+- `pyserial>=3.5` - Device discovery via `list_ports`
+- `click>=8.0` - CLI framework
+- `rich>=13.0` - Pretty console output
+- `textual>=0.50` - TUI framework
+- `mpremote>=1.20` - MicroPython device communication via `SerialTransport`
 
 **Dev:**
-- `pytest` - Testing framework
-- `black` - Code formatting
-- `ruff` - Linting
+- `pytest>=7.0` - Testing framework
+- `pytest-cov>=4.0` - Test coverage
+- `black>=23.0` - Code formatting
+- `ruff>=0.1.0` - Linting
+
+**Version Management:**
+- Version is dynamically sourced from `src/mpy_devices/__init__.py`
+- Configured in `pyproject.toml` with `dynamic = ["version"]`
+- Single source of truth prevents version drift
 
 ## Code Style
 

@@ -1,10 +1,12 @@
 """Core functionality for discovering and querying MicroPython devices."""
 
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List
 import serial.tools.list_ports
+from mpremote.transport_serial import SerialTransport
 
 
 # Error classes
@@ -80,10 +82,19 @@ def resolve_shortcut(device: str) -> str:
     """
     # Check for shortcut patterns
     if match := re.match(r"^a(\d+)$", device):
-        return f"/dev/ttyACM{match.group(1)}"
+        # Linux/macOS ACM devices
+        if sys.platform == "darwin":
+            return f"/dev/cu.usbmodem{match.group(1)}"
+        else:
+            return f"/dev/ttyACM{match.group(1)}"
     elif match := re.match(r"^u(\d+)$", device):
-        return f"/dev/ttyUSB{match.group(1)}"
+        # Linux/macOS USB-serial devices
+        if sys.platform == "darwin":
+            return f"/dev/cu.usbserial-{match.group(1)}"
+        else:
+            return f"/dev/ttyUSB{match.group(1)}"
     elif match := re.match(r"^c(\d+)$", device):
+        # Windows COM ports
         return f"COM{match.group(1)}"
 
     return device
@@ -93,12 +104,18 @@ def resolve_by_id_path(device_path: str) -> Optional[str]:
     """
     Find stable /dev/serial/by-id/ path for a device.
 
+    Linux-only feature - returns None on other platforms.
+
     Args:
         device_path: Device path like /dev/ttyACM0
 
     Returns:
         Stable by-id path or None if not found
     """
+    # by-id paths are Linux-specific
+    if sys.platform != "linux":
+        return None
+
     by_id_dir = Path("/dev/serial/by-id")
 
     if not by_id_dir.exists():
@@ -121,7 +138,7 @@ def discover_devices(include_ttyS: bool = False) -> List[DeviceInfo]:
     Discover all connected serial devices.
 
     Args:
-        include_ttyS: If True, include /dev/ttyS* devices (usually non-USB)
+        include_ttyS: If True, include /dev/ttyS* devices (usually non-USB, Linux only)
 
     Returns:
         List of DeviceInfo objects for discovered devices
@@ -129,9 +146,14 @@ def discover_devices(include_ttyS: bool = False) -> List[DeviceInfo]:
     devices = []
 
     for port in sorted(serial.tools.list_ports.comports(), key=lambda p: p.device):
-        # Skip /dev/ttyS* devices unless explicitly requested
-        if not include_ttyS and port.device.startswith("/dev/ttyS"):
-            continue
+        # Platform-specific filtering of non-USB devices
+        if not include_ttyS:
+            # Linux: Skip /dev/ttyS* (built-in serial ports)
+            if sys.platform == "linux" and port.device.startswith("/dev/ttyS"):
+                continue
+            # macOS: Skip /dev/tty.* (keep only /dev/cu.*)
+            elif sys.platform == "darwin" and port.device.startswith("/dev/tty."):
+                continue
 
         # Build DeviceInfo
         device_info = DeviceInfo(
@@ -145,7 +167,7 @@ def discover_devices(include_ttyS: bool = False) -> List[DeviceInfo]:
             hwid=port.hwid,
         )
 
-        # Try to resolve by-id path
+        # Try to resolve by-id path (Linux only)
         device_info.by_id_path = resolve_by_id_path(port.device)
 
         devices.append(device_info)
@@ -169,32 +191,6 @@ def query_device(device_path: str, timeout: int = 5) -> MicroPythonVersion:
         QueryTimeoutError: Query timed out
         ParseError: Failed to parse response
     """
-    # Try to import mpremote's SerialTransport
-    try:
-        # Try importing from installed mpremote package
-        from mpremote.transport_serial import SerialTransport
-    except ImportError:
-        try:
-            # Try importing from local MicroPython repo
-            import sys
-            from pathlib import Path
-
-            # Find micropython repo (look for tools/mpremote)
-            current = Path.cwd()
-            for parent in [current] + list(current.parents):
-                mpremote_path = parent / "tools" / "mpremote"
-                if mpremote_path.exists():
-                    sys.path.insert(0, str(mpremote_path))
-                    from mpremote.transport_serial import SerialTransport
-                    break
-            else:
-                raise ImportError("Could not find mpremote")
-        except ImportError:
-            raise DeviceError(
-                "mpremote not found. Install with: pip install mpremote\n"
-                "or run from MicroPython repository"
-            )
-
     # Resolve shortcuts
     resolved_device = resolve_shortcut(device_path)
 
@@ -213,23 +209,38 @@ def query_device(device_path: str, timeout: int = 5) -> MicroPythonVersion:
         output, _ = transport.exec_raw(command, timeout=timeout)
         output_str = output.decode('utf-8', errors='replace').strip()
 
+        # Parse the output
+        result = parse_uname_output(output_str)
+
         # Exit raw REPL and close
         transport.exit_raw_repl()
         transport.close()
 
-        # Parse the output
-        return parse_uname_output(output_str)
+        return result
 
-    except Exception as e:
+    except (TimeoutError, OSError) as e:
+        # Timeout errors from mpremote
         try:
             transport.close()
-        except:
+        except Exception:
             pass
+        raise QueryTimeoutError(f"Query timed out after {timeout}s: {e}")
 
-        if "timeout" in str(e).lower():
-            raise QueryTimeoutError(f"Query timed out after {timeout}s: {e}")
-        else:
-            raise DeviceError(f"Failed to query device: {e}")
+    except ParseError:
+        # Re-raise ParseError as-is
+        try:
+            transport.close()
+        except Exception:
+            pass
+        raise
+
+    except Exception as e:
+        # All other errors
+        try:
+            transport.close()
+        except Exception:
+            pass
+        raise DeviceError(f"Failed to query device: {e}")
 
 
 def parse_uname_output(output: str) -> MicroPythonVersion:

@@ -143,7 +143,7 @@ class MPyDevicesApp(App):
             yield DeviceDetails()
 
         with Container(id="status-bar"):
-            yield Static("Press [b]r[/b] to refresh, [b]q[/b] to quit", classes="status-text")
+            yield Static("", classes="status-text")
 
         yield Footer()
 
@@ -176,7 +176,7 @@ class MPyDevicesApp(App):
         self.devices = core.discover_devices()
 
         if not self.devices:
-            table.add_row("No devices found", "", "", "", "")
+            # Don't add a selectable row for empty state
             self.update_status(f"No devices found - {datetime.now().strftime('%H:%M:%S')}")
             return
 
@@ -197,11 +197,14 @@ class MPyDevicesApp(App):
         self.query_all_devices()
 
     def query_all_devices(self) -> None:
-        """Query all devices for version information."""
-        # Note: This is a simplified synchronous version
-        # In a full implementation, you'd want to use asyncio workers
-        # to query devices in parallel without blocking the UI
+        """
+        Query all devices for version information.
 
+        Design note: Uses synchronous queries for simplicity. This blocks the UI
+        during device queries, but is acceptable for typical device counts (< 10).
+        For large device counts or production use, consider implementing async
+        queries using asyncio workers or threading to maintain UI responsiveness.
+        """
         table = self.query_one(DeviceList)
 
         success_count = 0
@@ -243,7 +246,10 @@ class MPyDevicesApp(App):
         """Handle device selection."""
         details = self.query_one(DeviceDetails)
 
-        # Get selected device
+        # Get selected device (safely handle empty/invalid selection)
+        if not event.row_key or not hasattr(event.row_key, 'value'):
+            return
+
         device_path = event.row_key.value
 
         # Find device
