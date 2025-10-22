@@ -44,7 +44,6 @@ dev = [
 
 [project.scripts]
 mpy-devices = "mpy_devices.cli:main"
-check-devices = "mpy_devices.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/andrewleech/mpy-devices"
