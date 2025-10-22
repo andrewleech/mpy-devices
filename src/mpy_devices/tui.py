@@ -121,7 +121,8 @@ class MPyDevicesApp(App):
     """
 
     BINDINGS = [
-        Binding("r", "refresh", "Refresh"),
+        Binding("r", "refresh", "Refresh All"),
+        Binding("enter", "select_cursor", "Refresh Device"),
         Binding("q", "quit", "Quit"),
         Binding("?", "help", "Help"),
     ]
@@ -205,10 +206,10 @@ class MPyDevicesApp(App):
 
     def start_device_queries(self) -> None:
         """
-        Start querying all devices in parallel using worker threads.
+        Start querying all devices sequentially in a background thread.
 
-        Each device is queried in its own thread, allowing the UI to remain
-        responsive and show results as they complete.
+        Devices are queried one at a time to avoid conflicts when the same
+        physical device is accessible via multiple TTY paths.
         """
         # Cancel any existing workers from previous refresh
         self.cancel_workers()
@@ -221,21 +222,40 @@ class MPyDevicesApp(App):
             "failed": 0,
         }
 
-        # Spawn a worker for each device
-        for device in self.devices:
-            worker = self.query_device_worker(device)
-            self.active_workers.append(worker)
+        # Spawn a single worker that queries all devices sequentially
+        worker = self.query_all_devices_worker()
+        self.active_workers.append(worker)
 
         self.update_status(f"Querying {len(self.devices)} device(s)...")
 
     @work(thread=True, exclusive=False)
-    def query_device_worker(self, device: core.DeviceInfo) -> None:
+    def query_all_devices_worker(self) -> None:
         """
-        Query a single device in a background thread.
+        Query all devices sequentially in a background thread.
 
-        This worker runs in parallel with other device queries, allowing
-        the UI to update as each device completes.
+        Queries one device at a time to avoid conflicts when the same
+        physical device is accessible via multiple TTY paths.
         """
+        for device in self.devices:
+            try:
+                version = core.query_device(device.path, timeout=self.timeout)
+                # Update UI from thread
+                self.call_from_thread(self.update_device_success, device, version)
+
+            except Exception as e:
+                # Update UI from thread
+                self.call_from_thread(self.update_device_failure, device, str(e))
+
+    @work(thread=True, exclusive=False)
+    def refresh_single_device_worker(self, device: core.DeviceInfo) -> None:
+        """
+        Re-query a single device in a background thread.
+
+        Used when user presses Enter to refresh a specific device.
+        """
+        # Mark device as querying
+        self.call_from_thread(self.mark_device_querying, device)
+
         try:
             version = core.query_device(device.path, timeout=self.timeout)
             # Update UI from thread
@@ -244,6 +264,25 @@ class MPyDevicesApp(App):
         except Exception as e:
             # Update UI from thread
             self.call_from_thread(self.update_device_failure, device, str(e))
+
+    def mark_device_querying(self, device: core.DeviceInfo) -> None:
+        """Mark a device as being queried (called from main thread)."""
+        table = self.query_one(DeviceList)
+
+        # Clear version from cache
+        if device.path in self.versions:
+            del self.versions[device.path]
+
+        # Update table row to show querying status
+        table.update_cell(device.path, "board", "")
+        table.update_cell(device.path, "status", "[yellow]⟳ querying...[/yellow]")
+
+        # Update details if this device is currently selected
+        if table.cursor_row is not None:
+            row_key = table.get_row_at(table.cursor_row)[0]
+            if hasattr(row_key, 'value') and row_key.value == device.path:
+                details = self.query_one(DeviceDetails)
+                details.show_querying(device)
 
     def update_device_success(self, device: core.DeviceInfo, version: core.MicroPythonVersion) -> None:
         """Update UI when device query succeeds (called from main thread)."""
@@ -264,6 +303,13 @@ class MPyDevicesApp(App):
         self.query_stats["success"] += 1
         self.update_query_status()
 
+        # Update details if this device is currently selected
+        if table.cursor_row is not None:
+            row_key = table.get_row_at(table.cursor_row)[0]
+            if hasattr(row_key, 'value') and row_key.value == device.path:
+                details = self.query_one(DeviceDetails)
+                details.show_device(device, version)
+
     def update_device_failure(self, device: core.DeviceInfo, error: str) -> None:
         """Update UI when device query fails (called from main thread)."""
         table = self.query_one(DeviceList)
@@ -278,6 +324,13 @@ class MPyDevicesApp(App):
         self.query_stats["completed"] += 1
         self.query_stats["failed"] += 1
         self.update_query_status()
+
+        # Update details if this device is currently selected
+        if table.cursor_row is not None:
+            row_key = table.get_row_at(table.cursor_row)[0]
+            if hasattr(row_key, 'value') and row_key.value == device.path:
+                details = self.query_one(DeviceDetails)
+                details.show_error(device, error)
 
     def update_query_status(self) -> None:
         """Update status bar with current query progress."""
@@ -317,8 +370,25 @@ class MPyDevicesApp(App):
         self._show_device_details(event.row_key)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle device selection (Enter key)."""
-        self._show_device_details(event.row_key)
+        """Handle device selection (Enter key) - re-query the device."""
+        # Get device path from row key
+        if not event.row_key or not hasattr(event.row_key, 'value'):
+            return
+
+        device_path = event.row_key.value
+
+        # Find device
+        device = None
+        for d in self.devices:
+            if d.path == device_path:
+                device = d
+                break
+
+        if not device:
+            return
+
+        # Refresh this device
+        self.refresh_single_device_worker(device)
 
     def _show_device_details(self, row_key) -> None:
         """Show device details for the given row key."""
@@ -356,7 +426,7 @@ class MPyDevicesApp(App):
     def action_help(self) -> None:
         """Show help message."""
         self.update_status(
-            "Keys: [b]r[/b]=refresh [b]q[/b]=quit [b]↑↓[/b]=navigate [b]Enter[/b]=details"
+            "Keys: [b]r[/b]=refresh all [b]Enter[/b]=refresh device [b]↑↓[/b]=navigate [b]q[/b]=quit"
         )
 
     def update_status(self, message: str) -> None:

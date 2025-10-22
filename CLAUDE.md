@@ -317,11 +317,16 @@ def query_device_worker(self, device: core.DeviceInfo) -> None:
 
 **Key features:**
 - UI shows immediately after device discovery
-- Each device queried in parallel worker thread
+- Devices queried sequentially in background thread (avoids conflicts)
 - Table updates as each query completes
 - Status bar shows real-time progress (e.g., "Querying... 3/5 (2 OK, 1 failed)")
 - User can interact with UI while queries run
+- Arrow keys update details panel without re-querying
+- Enter key re-queries the selected device
 - Worker cancellation on refresh
+
+**Why sequential queries?**
+Some devices are accessible via multiple TTY paths (e.g., `/dev/ttyACM0` and `/dev/ttyACM1` for the same physical device). Querying them simultaneously causes conflicts. Sequential querying ensures only one device is accessed at a time.
 
 ## Future Enhancements
 
