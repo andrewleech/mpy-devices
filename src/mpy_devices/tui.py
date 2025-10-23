@@ -200,7 +200,7 @@ class MPyDevicesApp(App):
         table.add_column("Device", key="device", width=20)
         table.add_column("Serial", key="serial", width=15)
         table.add_column("VID:PID", key="vid_pid", width=10)
-        table.add_column("Board", key="board", width=35)
+        table.add_column("Board", key="board")  # Optimal width, will expand as content is added
         table.add_column("Status", key="status", width=10)
 
         # Load devices
@@ -335,6 +335,9 @@ class MPyDevicesApp(App):
         # Update table row
         table.update_cell(device.path, "board", board)
         table.update_cell(device.path, "status", "[green]✓[/green]")
+
+        # Refresh Board column to recalculate optimal width
+        table.refresh_column("board")
 
         # Update statistics
         self.query_stats["completed"] += 1
